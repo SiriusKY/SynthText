@@ -71,6 +71,8 @@ def add_res_to_db(imgname,res,db):
     db['data'][dname].attrs['charBB'] = res[i]['charBB']
     db['data'][dname].attrs['wordBB'] = res[i]['wordBB']        
     db['data'][dname].attrs['txt'] = res[i]['txt']
+    db['data'][dname].attrs['text_color'] = res[i]['text_color']
+    db['data'][dname].attrs['font'] = res[i]['font']
 
 
 def main(viz=False):
@@ -120,10 +122,10 @@ def main(viz=False):
       if len(res) > 0:
         # non-empty : successful in placing text:
         add_res_to_db(imname,res,out_db)
-      # visualize the output:
-      if viz:
-        if 'q' in raw_input(colorize(Color.RED,'continue? (enter to continue, q to exit): ',True)):
-          break
+      # # visualize the output:
+      # if viz:
+      #   if 'q' in raw_input(colorize(Color.RED,'continue? (enter to continue, q to exit): ',True)):
+      #     break
     except:
       traceback.print_exc()
       print colorize(Color.GREEN,'>>>> CONTINUING....', bold=True)

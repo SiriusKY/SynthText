@@ -12,6 +12,10 @@ import h5py
 from PIL import Image
 import numpy as np 
 #import mayavi.mlab as mym
+
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt 
 import os.path as osp
 import scipy.ndimage as sim
@@ -77,8 +81,8 @@ class TextRegions(object):
             xs,ys = np.where(mask)
 
             coords = np.c_[xs,ys].astype('float32')
-            rect = cv2.minAreaRect(coords)          
-            box = np.array(cv2.cv.BoxPoints(rect))
+            rect = cv2.minAreaRect(coords)
+            box = np.array(cv2.boxPoints(rect))
             h,w,rot = TextRegions.get_hw(box,return_rot=True)
 
             f = (h > TextRegions.minHeight 
@@ -215,9 +219,9 @@ def get_text_placement_mask(xyz,mask,plane,pad=2,viz=False):
     REGION : DICT output of TextRegions.get_regions
     PAD : number of pixels to pad the placement-mask by
     """
-    contour,hier = cv2.findContours(mask.copy().astype('uint8'),
-                                    mode=cv2.cv.CV_RETR_CCOMP,
-                                    method=cv2.cv.CV_CHAIN_APPROX_SIMPLE)
+    _, contour, hier = cv2.findContours(mask.copy().astype('uint8'),
+                                        mode=cv2.RETR_CCOMP,
+                                        method=cv2.CHAIN_APPROX_SIMPLE)
     contour = [np.squeeze(c).astype('float') for c in contour]
     #plane = np.array([plane[1],plane[0],plane[2],plane[3]])
     H,W = mask.shape[:2]
@@ -236,7 +240,7 @@ def get_text_placement_mask(xyz,mask,plane,pad=2,viz=False):
 
     # unrotate in 2D plane:
     rect = cv2.minAreaRect(pts_fp[0].copy().astype('float32'))
-    box = np.array(cv2.cv.BoxPoints(rect))
+    box = np.array(cv2.boxPoints(rect))
     R2d = su.unrotate2d(box.copy())
     box = np.vstack([box,box[0,:]]) #close the box for visualization
 
@@ -260,7 +264,7 @@ def get_text_placement_mask(xyz,mask,plane,pad=2,viz=False):
 
     pts_fp_i32 = [(pts_fp[i]+minxy[None,:]).astype('int32') for i in xrange(len(pts_fp))]
     cv2.drawContours(place_mask,pts_fp_i32,-1,0,
-                     thickness=cv2.cv.CV_FILLED,
+                     thickness=cv2.FILLED,
                      lineType=8,hierarchy=hier)
     
     if not TextRegions.filter_rectified((~place_mask).astype('float')/255):
@@ -523,9 +527,12 @@ class RendererV3(object):
         #feathering:
         text_mask = self.feather(text_mask, min_h)
 
-        im_final = self.colorizer.color(rgb,[text_mask],np.array([min_h]))
+        im_final, text_color = self.colorizer.color(rgb,[text_mask],np.array([min_h]))
 
-        return im_final, text, bb, collision_mask
+        font=str(font)[17:23]
+        # print('font:',font)
+
+        return im_final, text, bb, collision_mask, text_color, font
 
 
     def get_num_text_regions(self, nregions):
@@ -559,7 +566,7 @@ class RendererV3(object):
             # change shape from 2x4xn_i -> (4*n_i)x2
             cc = np.squeeze(np.concatenate(np.dsplit(cc,cc.shape[-1]),axis=1)).T.astype('float32')
             rect = cv2.minAreaRect(cc.copy())
-            box = np.array(cv2.cv.BoxPoints(rect))
+            box = np.array(cv2.boxPoints(rect))
 
             # find the permutation of box-coordinates which
             # are "aligned" appropriately with the character-bb.
@@ -631,7 +638,7 @@ class RendererV3(object):
 
             print colorize(Color.CYAN, " ** instance # : %d"%i)
 
-            idict = {'img':[], 'charBB':None, 'wordBB':None, 'txt':None}
+            idict = {'img':[], 'charBB':None, 'wordBB':None, 'txt':None, 'text_color':None, 'font':None}
 
             m = self.get_num_text_regions(nregions)#np.arange(nregions)#min(nregions, 5*ninstance*self.max_text_regions))
             reg_idx = np.arange(min(2*m,nregions))
@@ -642,6 +649,8 @@ class RendererV3(object):
             img = rgb.copy()
             itext = []
             ibb = []
+            icolor=[]
+            ifont=[]
 
             # process regions: 
             num_txt_regions = len(reg_idx)
@@ -669,12 +678,25 @@ class RendererV3(object):
 
                 if txt_render_res is not None:
                     placed = True
-                    img,text,bb,collision_mask = txt_render_res
+                    img,text,bb,collision_mask,text_color,font = txt_render_res
                     # update the region collision mask:
                     place_masks[ireg] = collision_mask
                     # store the result:
                     itext.append(text)
                     ibb.append(bb)
+                    icolor.append(text_color)
+                    if font=='r_sans':
+                        ifont.append([0,0,0])  # [1,1,1]=[is_italic, is_bold, serif]
+                    elif font=='r_seri':
+                        ifont.append([0,0,1])
+                    elif font=='i_sans':
+                        ifont.append([1,0,0])
+                    elif font=='i_seri':
+                        ifont.append([1,0,1])
+                    elif font=='b_sans':
+                        ifont.append([0,1,0])
+                    else:
+                        ifont.append([0,1,1])
 
             if  placed:
                 # at least 1 word was placed in this instance:
@@ -682,6 +704,8 @@ class RendererV3(object):
                 idict['txt'] = itext
                 idict['charBB'] = np.concatenate(ibb, axis=2)
                 idict['wordBB'] = self.char2wordBB(idict['charBB'].copy(), ' '.join(itext))
+                idict['text_color']=icolor
+                idict['font']=ifont
                 res.append(idict.copy())
                 if viz:
                     viz_textbb(1,img, [idict['wordBB']], alpha=1.0)
