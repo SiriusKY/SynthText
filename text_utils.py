@@ -398,10 +398,10 @@ class FontState(object):
     """
     size = [50, 10]  # normal dist mean, std
     underline = 0.05
-    strong = 0.5
-    oblique = 0.2
-    wide = 0.5
-    strength = [0.05, 0.1]  # uniform dist in this interval
+    strong = 0.0  # originaly being 0.5
+    oblique = 0.0  # originaly being 0.5
+    wide = 0.0  # originaly being 0.5
+    strength = [0.0, 0.0]  # uniform dist in this interval
     underline_adjustment = [1.0, 2.0]  # normal dist mean, std
     kerning = [2, 5, 0, 20]  # beta distribution alpha, beta, offset, range (mean is a/(a+b))
     border = 0.25
